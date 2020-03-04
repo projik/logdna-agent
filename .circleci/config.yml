@@ -17,6 +17,8 @@ executors:
       MAJOR_VERSION: 1.
     docker:
       - image: circleci/buildpack-deps:stretch
+orbs:
+  slack: circleci/slack@3.4.2
 jobs:
   test-unit:
     docker:
@@ -116,9 +118,10 @@ jobs:
   approve-docker-image:
     executor: docker-publisher
     steps:
-      - attach_workspace: 
-          at: /tmp/workspace  
-      - run: cat /tmp/workspace/env-vars >> ${BASH_ENV}
+     - slack/approval-notification:
+         color: "#aa7fcd" # Optional: Enter your own message
+         message: "Deployment pending approval" # Optional: Custom approval message
+         channel: "CG2K78UH2" # Optional: If set, overrides webhook's default channel setting
   docker-hub-upload:
     executor: docker-publisher
     steps:
