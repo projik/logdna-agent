@@ -115,13 +115,20 @@ jobs:
       - run:
           name: Scan Sandbox Image
           command: docker run -e IMAGE_TO_SCAN=${IMAGE_NAME}:sandbox-${DATESTAMP} -e SYSDIG_SECURE_TOKEN=${SYSDIG_SECURE_TOKEN} logdna/sysdigsecure
+  slack_notification:
+    executor: docker-publisher
+    steps:
+      - slack/approval-notification:
+          color: "#aa7fcd" # Optional: Enter your own message
+          message: "Deployment pending approval" # Optional: Custom approval message
+          channel: "CG2K78UH2" # Optional: If set, overrides webhook's default channel setting
+          webhook: ${SLACK_WEBHOOK}
   approve-docker-image:
     executor: docker-publisher
     steps:
-     - slack/approval-notification:
-         color: "#aa7fcd" # Optional: Enter your own message
-         message: "Deployment pending approval" # Optional: Custom approval message
-         channel: "CG2K78UH2" # Optional: If set, overrides webhook's default channel setting
+      - attach_workspace: 
+          at: /tmp/workspace  
+      - run: cat /tmp/workspace/env-vars >> ${BASH_ENV}
   docker-hub-upload:
     executor: docker-publisher
     steps:
@@ -241,3 +248,54 @@ workflows:
       - ibm-registry-upload:
           requires:
             - docker-hub-upload
+  test-publish:
+    jobs:
+      - test-unit:
+          filters:
+            branches:
+              only:
+                - add_slack_notification_agent
+      - image-build:
+          requires:
+            - test-unit
+          filters:
+            branches:
+              only:
+                - add_slack_notification_agent
+      - docker-sysdig-scan:
+          requires:
+            - image-build
+          filters:
+            branches:
+              only:
+                - add_slack_notification_agent
+      - slack_notification:
+          requires:
+            - docker-sysdig-scan
+          filters:
+            branches:
+              only:
+                - add_slack_notification_agent
+      - approve-docker-image:
+          type: approval
+          requires:
+            - docker-sysdig-scan
+          filters:
+            branches:
+              only:
+                - add_slack_notification_agent
+      - docker-hub-upload:
+          requires:
+            - approve-docker-image
+          filters:
+            branches:
+              only:
+                - add_slack_notification_agent
+      - ibm-registry-upload:
+          type: approval
+          requires:
+            - docker-sysdig-scan
+          filters:
+            branches:
+              only:
+                - add_slack_notification_agent
